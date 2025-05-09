@@ -1,3 +1,5 @@
+rm(list = ls())
+if (!is.null(dev.list())) while (!is.null(dev.list())) dev.off()
 # Load necessary libraries
 library(ggplot2)
 library(viridis)

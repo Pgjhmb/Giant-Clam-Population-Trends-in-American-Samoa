@@ -4,7 +4,7 @@ if (!is.null(dev.list())) {
   while (!is.null(dev.list())) {
     dev.off()  # Keep closing until all devices are closed
   }
-}
+} 
 
 library(lmtest)
 library(tidyverse)
@@ -18,16 +18,26 @@ library(gridExtra)
 library(grid)
 library(ggplot2)
 library(ggpubr)
+library(effectsize)
 
-Jurisdiction<- read.csv('/Users/Paolo/Desktop/UHManoa/GRANTS:Scholarships/Sea Grant 2022-2024/Am Sam Dive Trip Plans/FIELDWORK/2024 Survey Feb/2024 Faisua Surveys AS.csv', header = TRUE)
+#Jurisdiction<- read.csv('/Users/Paolo/Desktop/UHManoa/GRANTS:Scholarships/Sea Grant 2022-2024/Am Sam Dive Trip Plans/FIELDWORK/2024 Survey Feb/2024 Faisua Surveys AS.csv', header = TRUE)
+Jurisdiction<- read_excel('/Users/Paolo/Desktop/UHManoa/GRANTS:Scholarships/Sea Grant 2022-2024/Am Sam Dive Trip Plans/FIELDWORK/2024 Survey Feb/2024 Faisua Surveys AS.xlsx')
+view(Jurisdiction)
 Jurisdiction$Island[Jurisdiction$Island == "Tau"] <- "Ta‘ū"
 Jurisdiction$Island[Jurisdiction$Island == "Aunuu"] <- "Aunu‘u"
 Jurisdiction$Island[Jurisdiction$Island == "Muliava"] <- "Muliāva"
 Jurisdiction$Protection[Jurisdiction$Protection == "Inaccessible (Muliava)"] <- "Inaccessible (Muliāva)"
 Jurisdiction$Protection2[Jurisdiction$Protection2 == "Inaccessible (Muliava)"] <- "Inaccessible (Muliāva)"
-Jurisdiction[, 3] <- as.character(Jurisdiction[, 3])
 
+tutuila_data <- Jurisdiction %>% filter(Island == "Tutuila")
+view(tutuila_data)
 #view(Jurisdiction)
+
+count_tutuila <- Jurisdiction %>%
+  filter(Island == "Tutuila") %>%
+  count()
+
+print(count_tutuila)
 
 unique(Jurisdiction$Protection2)
 
@@ -43,6 +53,7 @@ custom_colors <- scale_fill_manual(
   values = c(
     "Federal No Take" = reddish_purple,
     "None" = sky_blue,
+    "Existing Government" = sky_blue,
     "Remote" = vermillion,
     "Subsistence" = reddish_purple,
     "Subsistence & Remote" = bluish_green,
@@ -65,12 +76,24 @@ Jurisdiction$Island[is.na(Jurisdiction$Island)] <- "Aunu‘u"
 unique(Jurisdiction$Island)
 
 # Recalculate the mean and standard error of Clams per Hectare for each Island and Protection group
+library(dplyr)
+
+count_test <- Jurisdiction %>%
+  filter(Island == 'Tutuila') %>%
+  group_by(Protection2) %>%
+  summarise(
+    mean_clamDense = mean(Density, na.rm = TRUE),
+    se_clamDense = sd(Density, na.rm = TRUE) / sqrt(n()), # Standard Error
+    n_surveys = n()
+  )
+  
+
 summary_data <- Jurisdiction %>%
   group_by(Island, Protection2) %>%
   summarise(
-    mean_clams = mean(Clams...Hectare, na.rm = TRUE),
-    se_clams = sd(Clams...Hectare, na.rm = TRUE) / sqrt(n()), # Standard Error
-    n_clams = n()
+    mean_clams = mean(Density, na.rm = TRUE),
+    se_clams = sd(Density, na.rm = TRUE) / sqrt(n()), # Standard Error
+    n_surveys = n()
   )
 
 summary_data_tutuila <- summary_data %>%
@@ -79,16 +102,16 @@ summary_data_tutuila <- summary_data %>%
 summary_data_island <- Jurisdiction %>%
   group_by(Island) %>%
   summarise(
-    mean_clams = mean(Clams...Hectare, na.rm = TRUE),
-    se_clams = sd(Clams...Hectare, na.rm = TRUE) / sqrt(n()), # Standard Error
+    mean_clams = mean(Density, na.rm = TRUE),
+    se_clams = sd(Density, na.rm = TRUE) / sqrt(n()), # Standard Error
     n_clams = n()
   )
 
 summary_data_Protection2 <- Jurisdiction %>%
   group_by(Protection2) %>%
   summarise(
-    mean_clams = mean(Clams...Hectare, na.rm = TRUE),
-    se_clams = sd(Clams...Hectare, na.rm = TRUE) / sqrt(n()), # Standard Error
+    mean_clams = mean(Density, na.rm = TRUE),
+    se_clams = sd(Density, na.rm = TRUE) / sqrt(n()), # Standard Error
     n_clams = n()
   )
 
@@ -101,25 +124,217 @@ summary_data$Island <- factor(summary_data$Island, levels = c("Tutuila", "Aunu�
 
 
 # Run a two-way ANOVA to test for differences in clam density between islands and protection status
-anova_island_protection <- aov(Clams...Hectare ~ Island * Protection2, data = Jurisdiction)
+anova_island_protection <- aov(Density ~ Island * Protection2, data = Jurisdiction)
 anova_summary_isl_pro <- summary(anova_island_protection)
+#                   Df    Sum Sq Mean Sq F value Pr(>F)
+#Island              5  23097204 4619441   0.924  0.471
+#Protection2         4    107372   26843   0.005  1.000
+#Island:Protection2  4    527805  131951   0.026  0.999
 
-anova_island <- aov(Clams...Hectare ~ Island, data = Jurisdiction)
-anova_summary_island <- summary(anova_island)
+anova_island <- aov(Density ~ Island, data = Jurisdiction)
+anova_summary_island <- summary(anova_island) #       0.41
 
-anova_Protection2 <- aov(Clams...Hectare ~  Protection2, data = Jurisdiction)
-anova_summary_pro2 <- summary(anova_Protection2)
+anova_Protection2 <- aov(Density ~  Protection2, data = Jurisdiction)
+anova_summary_pro2 <- summary(anova_Protection2)#   0.48
 
 # Extract the p-value for the interaction between Island and Protection
 anova_p_value <- anova_summary[[1]]["Island:Protection2", "Pr(>F)"]
 
 ########################        MMA
+test <- Jurisdiction %>%
+  filter(Island == "Olosega")
+
 summary_data_MMA_noMuliava <- Jurisdiction %>%
   filter(Island != "Muliāva") %>%
   group_by(Island, MMA) %>%
   summarise(
-    mean_clams = mean(Clams...Hectare, na.rm = TRUE),
-    se_clams = sd(Clams...Hectare, na.rm = TRUE) / sqrt(n()), # Standard Error
+    mean_clams = mean(Density, na.rm = TRUE),
+    se_clams = sd(Density, na.rm = TRUE) / sqrt(n()), # Standard Error
+    n_clams = n()
+  )
+
+
+# Define colorblind-friendly palette
+color_palette <- c("#0072B2", "#E69F00")  # Blue and orange
+
+Island_bar_MMA_no_muliava <- ggplot(summary_data_MMA_noMuliava, aes(x = Island, y = mean_clams, fill = MMA)) +
+  geom_bar(stat = "identity", 
+           position = position_dodge2(width = 0.7, preserve = "single"), 
+           width = 0.7, 
+           color = "black") +
+  geom_errorbar(aes(x = as.numeric(Island) + c(-0.16, 0.18, 0, 0, 0, 0),  # Adjust positions here
+                    ymin = mean_clams - se_clams, 
+                    ymax = mean_clams + se_clams), 
+                width = 0.2, 
+                position = position_dodge2(width = 0.7, preserve = "single")) +
+  scale_fill_manual(values = color_palette, name = "Protection") +
+  labs(x = "Island", y = "mean / ha") + 
+  theme_minimal() + 
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 9, face = "bold", color = "black"),
+    legend.title = element_text(size = 13, face = "bold", color = "black"),
+    panel.background = element_rect(fill = "grey90"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "black", size = 0.1),
+    axis.title.x = element_text(margin = margin(t = 5), size = 13, face = "bold", color = "black"),
+    axis.title.y = element_text(margin = margin(t = 5), size = 13, face = "bold", color = "black"),
+    axis.text.x = element_text(size = 12, face = "bold", color = "black"),
+    axis.text.y = element_text(size = 12, face = "bold", color = "black"),
+    panel.border = element_rect(color = "black", fill = NA, size = 1)
+  )
+
+# Display the plot
+print(Island_bar_MMA_no_muliava)
+
+
+#   ggsave("~/Desktop/Island-Bar2_MMA_no_muliava.jpg", plot = Island_bar_MMA, device = "jpeg", width = 8, height = 6, units = "in", dpi = 300)
+
+########################        MMA
+summary_data_MMA <- Jurisdiction %>%
+  group_by(Island, MMA) %>%
+  summarise(
+    mean_clams = mean(Density, na.rm = TRUE),
+    se_clams = sd(Density, na.rm = TRUE) / sqrt(n()), # Standard Error
+    n_clams = n()
+  )
+
+
+# Define colorblind-friendly palette
+color_palette <- c("#0072B2", "#E69F00")  # Blue and orange
+
+Island_bar_MMA <- ggplot(summary_data_MMA, aes(x = Island, y = mean_clams, fill = MMA)) +
+  geom_bar(stat = "identity", 
+           position = position_dodge2(width = 0.7, preserve = "single"), 
+           width = 0.7, 
+           color = "black") +
+  geom_errorbar(aes(x = as.numeric(Island) + c(-0.16, 0.18, 0, 0, 0, 0),  # Adjust positions here
+                    ymin = mean_clams - se_clams, 
+                    ymax = mean_clams + se_clams), 
+                width = 0.2, 
+                position = position_dodge2(width = 0.7, preserve = "single")) +
+  scale_fill_manual(values = color_palette, name = "Protection") +
+  labs(x = "Island", y = "Mean Density (clams / ha)") + 
+  theme_minimal() + 
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 9, face = "bold", color = "black"),
+    legend.title = element_text(size = 13, face = "bold", color = "black"),
+    panel.background = element_rect(fill = "grey90"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "black", size = 0.1),
+    axis.title.x = element_text(margin = margin(t = 5), size = 13, face = "bold", color = "black"),
+    axis.title.y = element_text(margin = margin(t = 5), size = 13, face = "bold", color = "black"),
+    axis.text.x = element_text(size = 12, face = "bold", color = "black"),
+    axis.text.y = element_text(size = 12, face = "bold", color = "black"),
+    panel.border = element_rect(color = "black", fill = NA, size = 1)
+  )
+
+# Display the plot
+print(Island_bar_MMA)
+
+
+#    ggsave("~/Desktop/Island-Bar2_MMA.jpg", plot = Island_bar_MMA, device = "jpeg", width = 8, height = 6, units = "in", dpi = 300)
+
+# Create the bar plot with averages, error bars, and colorblind-friendly colors
+Island_bar <- ggplot(summary_data, aes(x = Island, y = mean_clams, fill = Protection2)) + 
+  geom_bar(stat = "identity", position = position_dodge(0.8), width = 0.7, color = "black") +
+  geom_errorbar(aes(ymin = mean_clams - se_clams, ymax = mean_clams + se_clams), 
+                width = 0.2, position = position_dodge(0.8)) + 
+  labs(x = "Island", y = "mean / ha", fill = "Protection") + 
+  custom_colors +
+  theme_minimal() + 
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 9, face = "bold", color = "black"),
+    legend.title = element_text(size = 13, face = "bold", color = "black"),
+    panel.background = element_rect(fill = "grey90"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "black", size = 0.1),
+    axis.title.x = element_text(margin = margin(t = 5), size = 13, face = "bold", color = "black"),
+    axis.title.y = element_text(margin = margin(t = 5), size = 13, face = "bold", color = "black"),
+    axis.text.x = element_text(size = 12, face = "bold", color = "black"),
+    axis.text.y = element_text(size = 12, face = "bold", color = "black"),
+    panel.border = element_rect(color = "black", fill = NA, size = 1)
+  )
+
+# Print the plot
+print(Island_bar)
+
+
+
+####                         SAVE
+#ggsave("~/Desktop/Island-Protection2_Barplot.jpg", plot = Island_bar, device = "jpeg", width = 8, height = 6, units = "in", dpi = 300)
+
+
+ClamsHectare <- tutuila_data$Density
+grouped_data <- tutuila_data %>% group_by(Protection2) %>% summarise(n = n())
+print(grouped_data)
+
+
+summary_tutuila_data <- tutuila_data %>%
+  group_by(Protection2) %>%
+  summarise(
+    mean_clams = mean(Density, na.rm = TRUE),
+    se_clams = sd(Density, na.rm = TRUE) / sqrt(n()),
+    n_surveys = n()
+  )
+
+# Print summary to ensure it's calculating correctly
+print(summary_tutuila_data)
+
+#Mei Lin Neo's population classes
+data <- data.frame(
+  Class = c("Rare", "Frequent", "Abundant"),
+  Density = c(0.1, 10, 100)
+)
+
+
+bar_plot_tut <- ggplot(summary_tutuila_data, aes(x = Protection2, y = mean_clams, fill = Protection2)) + 
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 10, ymax = 100), fill = "#28ae80", alpha = 0.1) +  # Faint green between 10 and 100
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 0.1, ymax = 10), fill = "darkred", alpha = 0.1) +  # Faint red below 10
+  geom_bar(stat = "identity", position = position_dodge(0.8), width = 0.7, color = "black") +
+  geom_errorbar(aes(ymin = mean_clams - se_clams, ymax = mean_clams + se_clams), 
+                width = 0.2, position = position_dodge(0.8)) + 
+  labs(x = "Tutuila", 
+      y = "", 
+    fill = "Protection"  # Set the legend title to "Protection"
+  ) +
+  custom_colors +
+  theme_minimal() + 
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 10, face = "bold", color = "black"),
+    legend.title = element_text(size = 13, face = "bold", color = "black"),
+    panel.background = element_rect(fill = "grey90"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "black", size = 0.1),
+    axis.title.x = element_text(margin = margin(t = 5), size = 13, color = "black", face = "bold"),
+    axis.title.y = element_text(margin = margin(t = 5), size = 13, color = "black", face = "bold"),
+    axis.text.x = element_text(size = 9, color = "black", face = "bold"),
+    axis.text.y = element_text(size = 12, color = "black", face = "bold"),
+    panel.border = element_rect(color = "black", fill = NA, size = 1)
+  ) +
+  geom_hline(yintercept = 0.1, linetype = "dotted", color = "#210c4a", size = 1) +
+    geom_hline(yintercept = 10, linetype = "solid", color = "darkred", size = 1) +
+      geom_hline(yintercept = 100, linetype = "twodash", color = "#28ae80", size = 1) +
+      geom_text(aes(label = n_surveys, y = mean_clams + se_clams + 10), 
+                position = position_dodge(0.8), vjust = 0.5, size = 4, fontface = "bold", color = "black")
+    
+    # Display the plot
+    print(bar_plot_tut)
+    
+########################        MMA
+summary_data_MMA_noMuliava <- Jurisdiction %>%
+  filter(Island != "Muliāva") %>%
+  group_by(Island, MMA) %>%
+  summarise(
+    mean_clams = mean(Density, na.rm = TRUE),
+    se_clams = sd(Density, na.rm = TRUE) / sqrt(n()), # Standard Error
     n_clams = n()
   )
 
@@ -159,100 +374,7 @@ Island_bar_MMA <- ggplot(summary_data_MMA_noMuliava, aes(x = Island, y = mean_cl
 print(Island_bar_MMA)
 
 
-ggsave("~/Desktop/Island-Bar2_MMA.jpg", plot = Island_bar_MMA, device = "jpeg", width = 8, height = 6, units = "in", dpi = 300)
-
-# Create the bar plot with averages, error bars, and colorblind-friendly colors
-Island_bar <- ggplot(summary_data, aes(x = Island, y = mean_clams, fill = Protection2)) + 
-  geom_bar(stat = "identity", position = position_dodge(0.8), width = 0.7, color = "black") +
-  geom_errorbar(aes(ymin = mean_clams - se_clams, ymax = mean_clams + se_clams), 
-                width = 0.2, position = position_dodge(0.8)) + 
-  labs(x = "Island", y = "mean / ha", fill = "Protection") + 
-  custom_colors +
-  theme_minimal() + 
-  theme(
-    legend.position = "bottom",
-    legend.text = element_text(size = 9, face = "bold", color = "black"),
-    legend.title = element_text(size = 13, face = "bold", color = "black"),
-    panel.background = element_rect(fill = "grey90"),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.major.y = element_line(color = "black", size = 0.1),
-    axis.title.x = element_text(margin = margin(t = 5), size = 13, face = "bold", color = "black"),
-    axis.title.y = element_text(margin = margin(t = 5), size = 13, face = "bold", color = "black"),
-    axis.text.x = element_text(size = 12, face = "bold", color = "black"),
-    axis.text.y = element_text(size = 12, face = "bold", color = "black"),
-    panel.border = element_rect(color = "black", fill = NA, size = 1)
-  )
-
-# Print the plot
-print(Island_bar)
-
-
-
-####                         SAVE
-ggsave("~/Desktop/Island-Protection2_Barplot.jpg", plot = Island_bar, device = "jpeg", width = 8, height = 6, units = "in", dpi = 300)
-
-
-tutuila_data <- Jurisdiction %>% filter(Island == "Tutuila")
-
-ClamsHectare <- tutuila_data$Clams...Hectare
-grouped_data <- tutuila_data %>% group_by(Protection2) %>% summarise(n = n())
-print(grouped_data)
-
-
-summary_tutuila_data <- tutuila_data %>%
-  group_by(Protection2) %>%
-  summarise(
-    mean_clams = mean(Clams...Hectare, na.rm = TRUE),
-    se_clams = sd(Clams...Hectare, na.rm = TRUE) / sqrt(n()),
-    n_clams = n()
-  )
-
-# Print summary to ensure it's calculating correctly
-print(summary_tutuila_data)
-
-#Mei Lin Neo's population classes
-data <- data.frame(
-  Class = c("Rare", "Frequent", "Abundant"),
-  Density = c(0.1, 10, 100)
-)
-
-
-bar_plot_tut <- ggplot(summary_tutuila_data, aes(x = Protection2, y = mean_clams, fill = Protection2)) + 
-  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 10, ymax = 100), fill = "#28ae80", alpha = 0.1) +  # Faint green between 10 and 100
-  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 0.1, ymax = 10), fill = "darkred", alpha = 0.1) +  # Faint red below 10
-  geom_bar(stat = "identity", position = position_dodge(0.8), width = 0.7, color = "black") +
-  geom_errorbar(aes(ymin = mean_clams - se_clams, ymax = mean_clams + se_clams), 
-                width = 0.2, position = position_dodge(0.8)) + 
-  labs(
-    x = "Tutuila", 
-    y = "mean / ha", 
-    fill = "Protection"  # Set the legend title to "Protection"
-  ) +
-  custom_colors +
-  theme_minimal() + 
-  theme(
-    legend.position = "bottom",
-    legend.text = element_text(size = 10, face = "bold", color = "black"),
-    legend.title = element_text(size = 13, face = "bold", color = "black"),
-    panel.background = element_rect(fill = "grey90"),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.major.y = element_line(color = "black", size = 0.1),
-    axis.title.x = element_text(margin = margin(t = 5), size = 13, color = "black", face = "bold"),
-    axis.title.y = element_text(margin = margin(t = 5), size = 13, color = "black", face = "bold"),
-    axis.text.x = element_text(size = 9, color = "black", face = "bold"),
-    axis.text.y = element_text(size = 12, color = "black", face = "bold"),
-    panel.border = element_rect(color = "black", fill = NA, size = 1)
-  ) +
-  geom_hline(yintercept = 0.1, linetype = "dotted", color = "#210c4a", size = 1) +
-  geom_hline(yintercept = 10, linetype = "solid", color = "darkred", size = 1) +
-  geom_hline(yintercept = 100, linetype = "twodash", color = "#28ae80", size = 1) +
-  geom_text(aes(label = n_clams, y = mean_clams + se_clams + 10), 
-            position = position_dodge(0.8), vjust = 0.5, size = 4, fontface = "bold", color = "black")
-
-# Display the plot
-print(bar_plot_tut)
+# ggsave("~/Desktop/Island-Bar2_MMA.jpg", plot = Island_bar_MMA, device = "jpeg", width = 8, height = 6, units = "in", dpi = 300)
 
 get_legend <- function(my_plot) {
   tmp <- ggplot_gtable(ggplot_build(my_plot))
@@ -275,20 +397,20 @@ Island_bar3 <- Island_bar +
 
 ########################################################################################################
 # ANOVA for Island
-aov_island <- aov(Clams...Hectare ~ Island, data = Jurisdiction)
+aov_island <- aov(Density ~ Island, data = Jurisdiction)
 sum_island <- summary(aov_island)
 print("ANOVA results for Island:")
-print(sum_island)
+print(sum_island)   #   0.41
 
 # Extract p-value for Island
 p_value_island <- sum_island[[1]]$`Pr(>F)`[1]
 print(paste("P-value for Island:", p_value_island))
 
 # ANOVA for Protection2
-aov_protection <- aov(Clams...Hectare ~ Protection2, data = Jurisdiction)
+aov_protection <- aov(Density ~ Protection2, data = Jurisdiction)
 sum_protection <- summary(aov_protection)
 print("ANOVA results for Protection2:")
-print(sum_protection)
+print(sum_protection)#       9.08e-06
 
 # Extract p-value for Protection2
 p_value_protection <- sum_protection[[1]]$`Pr(>F)`[1]
@@ -337,7 +459,7 @@ bar_plot_tut2 <- ggplot(summary_tutuila_data, aes(x = Protection2, y = mean_clam
       ifelse(x == 0, paste0(" ", x), x)  # Add a space before the "0" label
     }
   ) +
-  geom_text(aes(label = n_clams, y = mean_clams + se_clams + 5),  # Lowered the numbers by reducing from +10 to +5
+  geom_text(aes(label = n_surveys, y = mean_clams + se_clams + 5),  # Lowered the numbers by reducing from +10 to +5
             position = position_dodge(0.5), vjust = c(-1.2, -0.5, -0.5, -0.5, -0.5) , size = 4, fontface = "bold", color = "black") +
   # Overlay horizontal lines for different population classes
   geom_hline(yintercept = 0.1, linetype = "dotted", color = "#210c4a", size = 1) +  # Rare in first viridis color
@@ -385,9 +507,25 @@ grid.arrange(
 dev.off()
 }
 
-clamsize<- read.csv('/Users/Paolo/Desktop/Faisua/Data (Besides Photos)/Am Samoa Clams Alison Green/2022-2024_All_Clams_Measured.csv', header = TRUE)
+clamsize<- read_xlsx('/Users/Paolo/Desktop/UHManoa/GRANTS:Scholarships/Sea Grant 2022-2024/Am Sam Dive Trip Plans/FIELDWORK/2022-2024_All_Clams_Measured.xlsx')
 clamssize_tut <- clamsize %>% filter(Island == c("Tutuila"))
 clamssize_tut_aunuu <- clamsize %>% filter(Island == c("Tutuila", "Aunu‘u"))
+
+summary_size_tutuila_data <- clamssize_tut_aunuu %>%
+  group_by(Island, Protection2) %>%
+  summarise(
+    mean_size = mean(Size, na.rm = TRUE),
+    se_clams = sd(Size, na.rm = TRUE) / sqrt(n()),
+    n_clam = n()
+  )
+
+count_size_tutuila_data <- clamssize_tut_aunuu %>%
+  group_by(Island) %>%
+  summarise(
+    mean_size = mean(Size, na.rm = TRUE),
+    se_clams = sd(Size, na.rm = TRUE) / sqrt(n()),
+    n_clam = n()
+  )
 
 
 { qq <- ggplot(clamssize_tut_aunuu, aes(x = Protection2, y = Size, fill = Protection2)) + 
@@ -397,7 +535,7 @@ clamssize_tut_aunuu <- clamsize %>% filter(Island == c("Tutuila", "Aunu‘u"))
   labs(y = "Clam Size (cm)") +
   theme_minimal() + 
   theme(
-    legend.position = "none",
+    #legend.position = "none",
     legend.text = element_text(size = 10, face = "bold"),   # Increase size and bold legend text
     legend.title = element_text(size = 13, face = "bold"),  # Increase size and bold legend title
     panel.background = element_rect(fill = "grey90"),
@@ -443,9 +581,9 @@ stats2 <- list(
                      method = "anova"),  
   stat_compare_means(comparisons = list(c("None", "Remote"),
                                         c("None", "Village Protected"),
-                                        c("None", "Subsistence & Remote")
+                                        c("None", "Subsistence & Remote"),
                                         c("Remote", "Subsistence & Remote"),
-                                        c("Subsistence & Remote", "Village Protected")
+                                        c("Subsistence & Remote", "Village Protected"),
                                         c("Remote", "Village Protected")),
                      method = "t.test", 
                      label = "p.signif", 
@@ -457,9 +595,9 @@ stats2
 summary_tutuila_data <- tutuila_data %>%
   group_by(Protection2) %>%
   summarise(
-    mean_clams = mean(Clams...Hectare, na.rm = TRUE),
-    se_clams = sd(Clams...Hectare, na.rm = TRUE) / sqrt(n()),
-    n_clams = n()
+    mean_clams = mean(Density, na.rm = TRUE),
+    se_clams = sd(Density, na.rm = TRUE) / sqrt(n()),
+    n_surveys = n()
   )
 
 
@@ -487,7 +625,7 @@ pp <- ggplot(clamssize_tut, aes(x = Protection2, y = Size, fill = Protection2)) 
   
   # Add sample sizes below each boxplot at y = 2
   geom_text(data = summary_tutuila_data, 
-            aes(x = Protection2, y = 2, label = paste0("n = ", n_clams)), 
+            aes(x = Protection2, y = 2, label = paste0("n = ", n_surveys)), 
             inherit.aes = FALSE, size = 4, fontface = "bold")
 
 pp
@@ -495,20 +633,20 @@ pp
 qq_with_stats <- qq + stats
 pp_with_stats <- pp + stats2
 
-ggsave("~/Desktop/pp_with_stats.jpg", plot = pp_with_stats, device = "jpeg", width = 8, height = 10, units = "in", dpi = 300)
+# ggsave("~/Desktop/pp_with_stats.jpg", plot = pp_with_stats, device = "jpeg", width = 8, height = 10, units = "in", dpi = 300)
 
 
 #########################################            ARCHIPELAGO WIDE
 
-anova_result_noIsl <- aov(Clams...Hectare ~ Protection2, data = Jurisdiction)
+anova_result_noIsl <- aov(Density ~ Protection2, data = Jurisdiction)
 anova_summary_noIsl <- summary(anova_result_noIsl)
 anova_p_value_noIsl <- anova_summary_noIsl[[1]]["Protection2", "Pr(>F)"]
 
 summary_data_noIsl <- Jurisdiction %>%
   group_by(Protection2) %>%
   summarise(
-    mean_clams = mean(Clams...Hectare, na.rm = TRUE),
-    se_clams = sd(Clams...Hectare, na.rm = TRUE) / sqrt(n()), # Standard Error
+    mean_clams = mean(Density, na.rm = TRUE),
+    se_clams = sd(Density, na.rm = TRUE) / sqrt(n()), # Standard Error
     n_clams = n()
   )
 
@@ -540,6 +678,74 @@ print(Protection2_bar)
 
 #ggsave("~/Desktop/Arch-Protection2_Barplot.jpg", plot = Protection2_bar, device = "jpeg", width = 8, height = 6, units = "in", dpi = 300)
 
+
+statsTEST2 <- list(
+  stat_compare_means(label = "p.signif", label.y = 19,
+                     method = "anova"),  
+  stat_compare_means(comparisons = list(c("None", "Remote"),
+                                        c("None", "Subsistence & Remote"),
+                                        c("Subsistence & Remote", "Village Protected")),
+                     
+                     method = "t.test", 
+                     label = "p.signif", 
+                     label.y = c(24, 27, 30))
+)
+
+statsTEST2
+
+
+# Summarize the count of clams per protection category
+clam_counts <- clamssize_tut %>%
+  group_by(Protection2) %>%
+  summarise(clam_count = n(),
+    mean_clamssize = mean(Size, na.rm = TRUE),
+    se_clams = sd(Size, na.rm = TRUE) / sqrt(n()),
+    )
+
+clamssize_tut$Protection2 <- factor(
+  clamssize_tut$Protection2,
+  levels = c("Federal No Take", "None", "Remote", "Subsistence", "Subsistence & Remote","Village Protected", "Inaccessible (Muliāva)")
+)
+
+TEST2 <- ggplot(clamssize_tut, aes(x = Protection2, y = Size, fill = Protection2)) + 
+  # Boxplot for clam sizes
+  geom_boxplot(outlier.colour = "red", outlier.shape = 8, outlier.size = 4) +
+  
+  # Labels and styling
+  labs(x = "Tutuila", y = "Clam Size (cm)") + 
+  custom_colors +
+  theme_minimal() + 
+  theme(
+    legend.position = "none",
+    legend.text = element_text(size = 10, face = "bold"),   
+    legend.title = element_text(size = 13, face = "bold"),  
+    panel.background = element_rect(fill = "grey90"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "black", size = 0.1),
+    axis.title.y = element_text(size = 13, face = "bold", color = "black"), 
+    axis.text.y = element_text(size = 10, face = "bold", color = "black"),
+    axis.text.x = element_blank(),   
+    axis.title.x = element_text(size = 16, face = "bold", color = "black"),
+    panel.border = element_rect(color = "black", fill = NA, size = 1),
+    axis.title.y.right = element_text(face = "bold", color = "black")  # Bold secondary y-axis label
+  ) +
+  
+  # Move primary y-axis to the right
+  scale_y_continuous(
+    position = "right"  # Moves the y-axis to the right
+  ) +
+  
+  # Add clam counts below each boxplot at y = 2
+  geom_text(data = clam_counts, 
+            aes(x = Protection2, y = 2, label = paste0("n = ", clam_count)), 
+            inherit.aes = FALSE, size = 4, fontface = "bold")
+
+# Combine plot with statistical comparisons
+TEST2_with_stats <- TEST2 + statsTEST2
+
+# Display the final plot
+TEST2_with_stats
 #########################################            STATS
 
 
@@ -581,5 +787,60 @@ grid.arrange(
 dev.off()
 
 
+########################################    TUTUILA ONLY     #########################       #########################
+unique(colnames(tutuila_data))
 
-###############
+
+anova_tut_protection <- aov(Density ~ Protection2, data = tutuila_data)
+anova_summary_tut_pro <- summary(anova_tut_protection)
+anova_summary_tut_pro
+eta_squared(anova_tut_protection, partial = FALSE)  # η² (general effect size)
+eta_squared(anova_tut_protection, partial = TRUE)   # η²ₚ (partial effect size)
+
+unique(Jurisdiction$MMA)
+
+anova_MMA <- aov(Density ~ MMA, data = Jurisdiction)
+anova_summary_MMA <- summary(anova_MMA)
+anova_summary_MMA
+anova_MMA
+eta_squared(anova_MMA, partial = FALSE)  # η² (general effect size)
+eta_squared(anova_MMA, partial = TRUE)   # η²ₚ (partial effect size)
+
+
+anova_tut_MMA <- aov(Density ~ MMA, data = tutuila_data)
+anova_summary_tut_MMA <- summary(anova_tut_MMA)
+anova_summary_tut_MMA
+eta_squared(anova_tut_MMA, partial = FALSE)  # η² (general effect size)
+eta_squared(anova_tut_MMA, partial = TRUE)   # η²ₚ (partial effect size)
+
+anova_tut_Juris <- aov(Density ~ Jurisdiction, data = tutuila_data)
+anova_summary_tut_Juris <- summary(anova_tut_Juris)
+anova_summary_tut_Juris
+eta_squared(anova_tut_Juris, partial = FALSE)  # η² (general effect size)
+eta_squared(anova_tut_Juris, partial = TRUE)   # η²ₚ (partial effect size)
+
+anova_tut_quadrant <- aov(Density ~ Quadrant, data = tutuila_data)
+anova_summary_tut_quad <- summary(anova_tut_quadrant)
+anova_summary_tut_quad
+eta_squared(anova_tut_quadrant, partial = FALSE)  # η² (general effect size)
+eta_squared(anova_tut_quadrant, partial = TRUE)   # η²ₚ (partial effect size)
+
+view(tutuila_data)
+
+anova_tut_quad_pro <- aov(Density ~ Quadrant * Protection2, data = tutuila_data)
+anova_summary_tut_quad_pro <- summary(anova_tut_quad_pro)
+anova_summary_tut_quad_pro
+eta_squared(anova_tut_quad_pro, partial = FALSE)  # η² (general effect size)
+eta_squared(anova_tut_quad_pro, partial = TRUE)   # η²ₚ (partial effect size)
+
+anova_tut_juris_pro <- aov(Density ~ Jurisdiction * Protection2, data = tutuila_data)
+anova_summary_tut_juris_pro <- summary(anova_tut_juris_pro)
+anova_summary_tut_juris_pro
+eta_squared(anova_tut_juris_pro, partial = FALSE)  # η² (general effect size)
+eta_squared(anova_tut_juris_pro, partial = TRUE)   # η²ₚ (partial effect size)
+
+aov_tut_full <- aov(Density ~ Quadrant * Jurisdiction * Protection2, data = tutuila_data)							
+aov_tut_summary_full <- summary(aov_tut_full)
+aov_tut_summary_full
+eta_squared(aov_tut_full, partial = FALSE)  # η² (general effect size)
+eta_squared(aov_tut_full, partial = TRUE)   # η²ₚ (partial effect size)

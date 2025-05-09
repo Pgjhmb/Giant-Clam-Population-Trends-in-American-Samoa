@@ -23,9 +23,10 @@ library(emmeans)
 library(hrbrthemes)
 library(gridExtra)
 library(grid)
+library(readxl)
 # Load the data
-SurveyData <- read.csv('/Users/Paolo/Desktop/UHManoa/GRANTS:Scholarships/Sea Grant 2022-2024/Am Sam Dive Trip Plans/FIELDWORK/2024 Survey Feb/1996-24 All Surveys.csv')
 
+SurveyData <- read_excel('/Users/Paolo/Desktop/UHManoa/GRANTS:Scholarships/Sea Grant 2022-2024/Am Sam Dive Trip Plans/FIELDWORK/2024 Survey Feb/1996-24 All Surveys.xlsx', sheet = 1)
 
 # Load necessary libraries
 #view(SurveyData)
@@ -40,22 +41,47 @@ SurveyData <- SurveyData %>%
 SurveyData$Island <- factor(SurveyData$Island, 
                             levels = c("Tutuila", "Aunu‘u", "Ofu", "Olosega", "Ta‘ū"))
 # Calculate mean and standard error for Clams / Hectare by Island and Year
-Dens <- SurveyData$Mean.Dens
+Dens <- SurveyData$Mean_Dens
 SE <- SurveyData$SE
-Num <- SurveyData$Mean.Num
+Num <- SurveyData$Mean_Num
 Year <- SurveyData$Year
 Island <- SurveyData$Island
 
 #library(grid)   
-# For rasterGrob to add the image
+#For rasterGrob to add the image
 #library(png)        # For reading PNG images
 #library(cowplot)    # Optional, for `background_image()`
 
+Survey2Data <- read_excel('/Users/Paolo/Desktop/UHManoa/GRANTS:Scholarships/Sea Grant 2022-2024/Am Sam Dive Trip Plans/FIELDWORK/2024 Survey Feb/Mean Clams Sites 1994-2022_PMB.xlsx', sheet = "Mean Clams Sites 1994-2022")
+unique(colnames(Survey2Data))
+
+Survey2Data$Island <- factor(Survey2Data$Island)
+Survey2Data$Site <- factor(Survey2Data$Site)
+Survey2Data$Year <- factor(Survey2Data$Year)
+
+# Ensure Mean_Dens is numeric (if needed)
+Survey2Data$Mean_Dens <- as.numeric(Survey2Data$Mean_Dens)
+
+
+anova_island_Dens2 <- aov(Mean_Dens ~ Island, data = SurveyData)
+summary(anova_island_Dens2) #       1.37e-14 ***      0.00466 with only island specific excel file
+
+anova_island_Year_Dens <- aov(Mean_Dens ~ Island * Year, data = SurveyData)
+summary(anova_island_Year_Dens) #       1.37e-14 ***      0.00466 with only island specific excel file
+
+
+anova_year_Dens2 <- aov(Mean_Dens ~ Year, data = Survey2Data)
+summary(anova_year_Dens2) #         0.168
+
+
+
+##########################################
 SurveyData
 #SurveyData$Island <- factor(SurveyData$Island, levels = c("Tutuila","Aunu'u", "Ofu", "Olosega", "Ta‘ū"))
-SurveyData$MeanDens <- SurveyData$Mean.Dens
 
-anova_island_Dens <- aov(Mean.Dens ~ Island, data = SurveyData)
+SurveyData$MeanDens <- SurveyData$Mean_Dens
+
+anova_island_Dens <- aov(Mean_Dens ~ Island, data = SurveyData)
 summary(anova_island_Dens) #       0.00466 **
 
 anova_island_year <- aov(Mean.Dens ~ Year, data = SurveyData)
